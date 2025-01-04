@@ -1,76 +1,139 @@
 from bs4 import BeautifulSoup
-import requests
 import pandas as pd
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.wait import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from datetime import datetime
 
-#DOGS AND CATS, count=191
-html = requests.get('https://www.rover.com/blog/poisonous-plants/').text
+options = webdriver.ChromeOptions()
+options.add_argument("--log-level=3")
+driver = webdriver.Chrome(options=options)  # or use the appropriate WebDriver for your browser
+driver.get('https://www.rover.com/blog/poisonous-plants/')
 
-soup = BeautifulSoup(html, 'lxml')
+# Wait for content to load
+driver.implicitly_wait(5)
 
-#Find all plants
-plants = soup.find_all('tr', class_='tile tile-plant')
-counter = 0
 
-#LIST VARIABLES FOR SAVING
-names = []
-science_names = []
-dogs = []
-cats = []
-ptype = []
-level = []
-symptom = []
+# extract plant info from page
+def extract_plants():
+    body_element = driver.find_element(By.TAG_NAME, 'body')
+    html = body_element.get_attribute('innerHTML')
 
-#Iterate through plants and print info
-for plant in plants:
-    #finding data on web page
-    plant_name = plant.find('h4', class_='tile-title').text
-    plant_science = plant.find('div', class_='scientific-name').text
-    plant_type = plant.find('td', class_='attribute type').text
-    toxicity_level = plant.find('td', class_='attribute toxicity').text
-    toxic_to_dog = [item['data-label'] for item in plant.find_all('td', class_='toxic_to_dogs', attrs={'data-label': True})]
-    toxic_to_cat = [item['data-label'] for item in plant.find_all('td', class_='toxic_to_cats', attrs={'data-label': True})]
-    symptoms = plant.find('ul', class_='symptom-list').find_all('li')
+    soup = BeautifulSoup(html, 'html.parser')
+    plants = soup.select('tr.tile.tile-plant')
 
-    #keep count of plants
-    counter += 1
+    return plants
 
-    print(f'Plant ID:  {counter}')
-    print(f'Plant Name: {plant_name}')
-    print(f'Scientific Name: {plant_science}')
 
-    #TOXICITY TO ANIMALS, active = yes
-    if toxic_to_dog.__contains__('active'):
-        print(f'Toxic to Dogs?: ' + ''.join(toxic_to_dog))
-        dog_int = 1
-    else:
-        print(f'Toxic to Dogs?: no')
-        dog_int = 0
+def formatSave(all_plants):
+    #LIST VARIABLES FOR SAVING
+    names = []
+    science_names = []
+    dogs = []
+    cats = []
+    ptype = []
+    level = []
+    symptom = []
 
-    if toxic_to_cat.__contains__('active'):
-        print(f'Toxic to Cats?: ' + ''.join(toxic_to_cat))
-        cat_int = 1
-    else:
-        print('Toxic to Cats?: no')
-        cat_int = 0
+    #Iterate through plants and print info
+    for plant in all_plants:
+        #finding data on web page
+        plant_name = plant.find('h4', class_='tile-title').text
+        plant_science = plant.find('div', class_='scientific-name').text
+        plant_type = plant.find('td', class_='attribute type').text
+        toxicity_level = plant.find('td', class_='attribute toxicity').text
+        toxic_to_dog = [item['data-label'] for item in plant.find_all('td', class_='toxic_to_dogs', attrs={'data-label': True})]
+        toxic_to_cat = [item['data-label'] for item in plant.find_all('td', class_='toxic_to_cats', attrs={'data-label': True})]
+        symptoms = plant.find('ul', class_='symptom-list').find_all('li')
 
-    print(f'Plant Type: {plant_type}')
-    print(f'Toxicity Level: {toxicity_level}')
+        # print(f'Plant Name: {plant_name}')
+        # print(f'Scientific Name: {plant_science}')
 
-    #SYMPTOMS
-    print('Symptoms: ' + ', '.join(symptom.get_text() for symptom in symptoms)+'\n')
+        #TOXICITY TO ANIMALS, active = yes
+        if toxic_to_dog.__contains__('active'):
+            # print(f'Toxic to Dogs?: ' + ''.join(toxic_to_dog))
+            dog_int = 1
+        else:
+            # print(f'Toxic to Dogs?: no')
+            dog_int = 0
 
-    #APPENDING DATA TO LISTS
-    names.append(plant_name)
-    science_names.append(plant_science)
-    dogs.append(dog_int)
-    cats.append(cat_int)
-    ptype.append(plant_type)
-    level.append(toxicity_level)
-    symptom.append(', '.join(symptom.get_text() for symptom in symptoms))
+        if toxic_to_cat.__contains__('active'):
+            # print(f'Toxic to Cats?: ' + ''.join(toxic_to_cat))
+            cat_int = 1
+        else:
+            # print('Toxic to Cats?: no')
+            cat_int = 0
 
-print(f'Total Plants: {counter}')
+        # print(f'Plant Type: {plant_type}')
+        # print(f'Toxicity Level: {toxicity_level}')
 
-#EXPORTING TO .CSV & EXCEL
-df = pd.DataFrame({'Plant Name': names, 'Scientific Name': science_names, 'Dogs': dogs, 'Cats': cats, 'Plant Type': ptype, 'Toxicity Level': level, 'Symptoms': symptom})
-df.to_csv('plantInfo_Updated.csv', index=False, encoding='utf-8-sig')
-df.to_excel('PlantInfo_EXCEL.xlsx', index=False, encoding='utf-8')
+        #SYMPTOMS
+        # print('Symptoms: ' + ', '.join(symptom.get_text() for symptom in symptoms)+'\n')
+
+        #APPENDING DATA TO LISTS
+        names.append(plant_name)
+        science_names.append(plant_science)
+        dogs.append(dog_int)
+        cats.append(cat_int)
+        ptype.append(plant_type)
+        level.append(toxicity_level)
+        symptom.append(', '.join(symptom.get_text() for symptom in symptoms))
+
+    # EXPORTING TO .CSV & EXCEL
+    try:
+        today = datetime.today().strftime('%Y-%m-%d')
+
+        df = pd.DataFrame({'Plant Name': names, 'Scientific Name': science_names, 'Dogs': dogs, 'Cats': cats, 'Plant Type': ptype, 'Toxicity Level': level, 'Symptoms': symptom})
+        df.to_csv(f'output/plantInfo_{today}.csv', index=False, encoding='utf-8')
+        df.to_excel(f'output/PlantInfo_{today}.xlsx', index=False, encoding='utf-8')
+        print(f"Save completed successfully: {today}")
+    except Exception as e:
+        print("Error occurred when saving to excel and/or csv: ", str(e))
+
+
+# List to store all plant data
+all_plants = []
+page = 0
+
+# Loop through pages
+while True:
+    # Extract plants from the current page
+    plants = extract_plants()
+    # Add the current page's plants to the list
+    all_plants.extend(plants)
+    # check for next button: id =poisonous-plants-list_next
+    try:
+        page += 1
+        print("Page: ", page)
+        # wait until next page button is loaded fully
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, "//a[@class='paginate_button next']")))
+        #find the next button
+        next_button = driver.find_element(By.XPATH, "//a[@class='paginate_button next']")
+
+        if next_button:
+            #click button
+            driver.execute_script("arguments[0].click();", next_button)
+            # next_button.click()
+            driver.implicitly_wait(5)
+            print("Loading next page... ")
+        else:
+            break
+    except Exception as e:
+        errorString = str(e)
+        if "Element not found" not in errorString:
+            print("No more pages.")
+            break
+        else:
+            print('Error: ', errorString)
+    except:
+        print("Total pages checked: ", page)
+        break
+
+# Close the browser
+driver.quit()
+
+#get variables from plant data
+formatSave(all_plants)
+
+print(f"Total rows saved: {len(all_plants)}")
